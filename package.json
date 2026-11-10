@@ -1,6 +1,6 @@
 {
   "name": "m3dusa-cli",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Linux-Knoten für M3DUSA: koppeln, Aufträge vom Haupt-PC ausführen, Claude Code/Codex lokal starten.",
   "type": "module",
   "bin": { "m3dusa": "bin/m3dusa.mjs" },

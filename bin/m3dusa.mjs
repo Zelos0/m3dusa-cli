@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { cleanServer, DEFAULT_SERVER, dirs, expandHome, fingerprint, groups, hubCall, isPaired, parseCode, readCfg, updateCfg, VERSION, writeCfg } from '../lib/core.mjs'
+import { addRevoked, clock, cleanServer, DEFAULT_SERVER, dirs, expandHome, fingerprint, groups, hubCall, isPaired, knownGuests, parseCode, readCfg, updateCfg, VERSION, writeCfg } from '../lib/core.mjs'
 import { foldersOf, modeOf, sandboxStatus } from '../lib/policy.mjs'
 import { grant, parseWindow, revoke, sudoStatus, sudoTarget } from '../lib/sudo.mjs'
 import { agentArgv, agentsAvailable, readAgentLine, viaLoginShell } from '../lib/agents.mjs'
@@ -36,6 +36,10 @@ ${c.b('Freigaben')} (nur hier am Linux-PC änderbar)
   m3dusa sudo 30m|1h|8h|heute|1d|immer   sudo-Zeitfenster (fragt dein Passwort hier im Terminal)
   m3dusa sudo aus | status
 
+${c.b('Gäste')} (Zugang auf Zeit, vom Besitzer in M3DUSA geteilt)
+  m3dusa gaeste [alle]            Gastzugänge zeigen (aktive; "alle" auch beendete)
+  m3dusa gaeste sperren <ID>      Zugang hier sofort sperren (ID aus der Liste, z. B. g_1a2b3c4d5e6f)
+
 ${c.b('Selbst arbeiten')}
   m3dusa agent claude|codex "<Auftrag>" [--ordner PFAD] [--modell M]
   m3dusa log [Anzahl]             Protokoll der Aufträge vom Haupt-PC
@@ -57,6 +61,7 @@ async function main() {
     case 'ordner': case 'folders': return folders()
     case 'modus': case 'mode': return mode()
     case 'sudo': return sudo()
+    case 'gaeste': case 'gäste': case 'guests': return guests()
     case 'agent': return agent()
     case 'log': return showLog()
     case 'dienst': case 'service': return service()
@@ -121,6 +126,8 @@ async function status() {
   console.log('sudo:   ' + (s.root ? 'läuft als root' : s.active ? c.g('frei') + (s.forever ? ' (immer)' : s.until ? ' bis ' + fmtTime(s.until) : ' (eigene sudo-Regel/Zeitstempel)') : 'gesperrt — m3dusa sudo 1h'))
   const ag = agentsAvailable()
   console.log('KI:     ' + ['claude', 'codex'].map(a => `${a} ${ag[a] ? c.g('✓') : c.d('–')}`).join('   '))
+  const gn = knownGuests().filter(g => g.state === 'aktiv').length
+  if (gn) console.log(`Gäste:  ${c.b(String(gn))} aktiv — m3dusa gaeste`)
   if (hasSystemd()) console.log('Dienst: ' + spawnSync('systemctl', ['--user', 'is-active', 'm3dusa'], { encoding: 'utf8' }).stdout.trim())
 }
 
@@ -174,6 +181,26 @@ function sudo() {
   console.log(c.d(`(Regel: ${sudoTarget()} — sudo fragt jetzt einmal nach deinem Passwort)`))
   try { grant(until) } catch (e) { die(e.message) }
   console.log(c.g('✓ ') + 'sudo-Fenster offen.')
+}
+
+function guests() {
+  const [sub, id] = rest()
+  if (sub === 'sperren' || sub === 'revoke') {
+    if (!id) die('Aufruf: m3dusa gaeste sperren <ID>   (ID siehe: m3dusa gaeste)')
+    let fresh
+    try { fresh = addRevoked(id, clock(), 'lokal') } catch (e) { die(e.message) }
+    console.log(c.g('✓ ') + (fresh ? `Zugang ${id} gesperrt.` : `Zugang ${id} war schon gesperrt.`) + ' Laufende Aufträge dieses Zugangs beendet der Dienst innerhalb weniger Sekunden.')
+    return
+  }
+  if (sub && sub !== 'alle' && sub !== 'liste') die('m3dusa gaeste [alle] | m3dusa gaeste sperren <ID>')
+  const all = knownGuests().filter(g => sub === 'alle' || g.state === 'aktiv')
+  if (!all.length) return console.log(sub === 'alle' ? 'Keine Gastzugänge bekannt.' : 'Keine aktiven Gastzugänge. (Sie erscheinen, sobald der Besitzer einen Zugang bestätigt hat und dieser Dienst läuft.)')
+  for (const g of all) {
+    const col = g.state === 'aktiv' ? c.g : c.y
+    const r = g.rights || {}
+    console.log(`${c.b(g.grantId)}  ${col(g.state.padEnd(10))} ${g.guestName}  bis ${fmtTime(g.expiresAt)}  ${c.d('Schlüssel ' + groups(g.guestFp))}`)
+    console.log(`    Rechte: ${(r.kinds || []).join(', ')}${r.sudo ? ', sudo' : ' (kein sudo)'}${r.folders?.length ? ' · Ordner: ' + r.folders.join(', ') : ''}  ·  Aufträge: ${g.jobs || 0}${g.lastUsed ? ', zuletzt ' + fmtTime(g.lastUsed) : ''}`)
+  }
 }
 
 async function agent() {
