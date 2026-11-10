@@ -48,39 +48,48 @@ Der Code ist 10 Minuten gültig und funktioniert nur einmal. Er enthält den **F
 | `m3dusa modus benutzer` | Aufträge dürfen alles, was dein Benutzer darf |
 | `m3dusa sudo 30m` / `1h` / `8h` / `heute` / `1d` / `immer` | sudo-Zeitfenster öffnen; dein Passwort fragt sudo selbst ab |
 | `m3dusa sudo aus` · `m3dusa sudo status` | Zeitfenster sofort schließen bzw. anzeigen |
-| `m3dusa agent claude "<Auftrag>" --ordner ~/projekte/x` | Claude Code oder Codex lokal starten |
+| `m3dusa agent claude "<Auftrag>" --ordner ~/projekte/x` | Claude Code oder Codex lokal starten (`--modell M`, `--aufwand STUFE`) |
 | `m3dusa log` | Protokoll aller Aufträge vom Haupt-PC |
 | `m3dusa dienst status` / `start` / `stop` / `neustart` / `logs` | den Dienst steuern |
 | `m3dusa dienst autostart` | Dienst läuft auch ohne Anmeldung (`loginctl enable-linger`) |
 | `m3dusa update` | neueste Fassung holen (`git pull`) und Dienst neu starten |
-| `m3dusa pruefen` | alles prüfen |
+| `m3dusa pruefen` | alles prüfen, auch **wo** Claude/Codex gefunden wurden (bzw. wo gesucht wurde) und ob sie angemeldet sind |
 | `m3dusa logout` | Kopplung lösen |
 
 ## Terminal-Modus
 
 `m3dusa` ohne Argumente startet in einem echten Terminal einen interaktiven Modus, ähnlich wie `claude` oder `codex`. Ausdrücklich geht es auch mit `m3dusa chat`. Ohne Terminal (z. B. in Skripten mit Umleitung) zeigt `m3dusa` wie bisher die Hilfe. Alle anderen Befehle bleiben unverändert.
 
-- **Start:** eine kurze Animation (Logo mit Farbverlauf Violett → Cyan → Grün, Schlangen als Welle), danach ein Statusfeld mit Version, Gerät, Hub-Verbindung, Dienst, gefundenen Agenten (mit Version), Arbeitsordner und aktivem Agenten/Modell. Ohne Animation: `m3dusa chat --no-anim` oder `M3DUSA_NO_ANIM=1`. Bei `NO_COLOR` oder `TERM=dumb` gibt es nur ein ruhiges Banner ohne Farbe.
-- **Freitext** ist ein Auftrag an den aktiven Agenten im aktuellen Ordner. Die Ausgabe erscheint live; solange nichts kommt, läuft ein Spinner. Am Ende steht die Dauer. Folgeaufträge behalten den Kontext (`claude --resume <Sitzung>` bzw. `codex exec resume <Sitzung>`).
-- **Tasten:** ↑/↓ Verlauf, Tab ergänzt Befehle und Ordner, `\` am Zeilenende schreibt in der nächsten Zeile weiter. Strg+C während eines Laufs bricht nur den Lauf ab; am leeren Prompt zweimal Strg+C (oder Strg+D) beendet.
+- **Start:** eine kurze Animation (Logo mit Farbverlauf Violett → Cyan → Grün, Schlangen als Welle), danach ein Statusfeld mit Version, Gerät, Hub-Verbindung, Dienst, je einer Zeile für Claude und Codex (Version und **angemeldet ✓ / nicht angemeldet / fehlt**), Arbeitsordner und aktivem Agenten mit Modell und Aufwand. Ohne Animation: `m3dusa chat --no-anim` oder `M3DUSA_NO_ANIM=1`. Bei `NO_COLOR` oder `TERM=dumb` gibt es nur ein ruhiges Banner ohne Farbe.
+- **Freitext** ist ein Auftrag an den aktiven Agenten im aktuellen Ordner. Die Ausgabe erscheint live; solange nichts kommt, läuft ein Spinner. Am Ende stehen die Dauer und die **Token** (Eingabe, Ausgabe, Cache) mit dem Vergleichswert „entspräche API-Preis ≈ $X“. Im Abo zahlst du das nicht; die Zahl zeigt nur, was derselbe Lauf über die API gekostet hätte (Preise: `lib/prices.json`, erzeugt mit `node tools/sync-prices.mjs` aus der Preisliste von M3DUSA). Kennt die Liste das Modell nicht, steht dort „unbekannt“. Codex meldet kein Cache-Schreiben, deshalb ist sein Wert eine Untergrenze („ab“). Folgeaufträge behalten den Kontext (`claude --resume <Sitzung>` bzw. `codex exec resume <Sitzung>`).
+- **Tasten:** Sobald die Zeile mit `/` beginnt, erscheint darunter eine gefilterte Befehlsliste mit Kurzbeschreibung: ↑/↓ wählt, Tab oder Enter übernimmt, Esc schließt sie. Sonst: ↑/↓ Verlauf, Tab ergänzt Befehle, Modelle und Ordner, `\` am Zeilenende schreibt in der nächsten Zeile weiter. Strg+C während eines Laufs bricht nur den Lauf ab; am leeren Prompt zweimal Strg+C (oder Strg+D) beendet.
+- **Modell und Aufwand:** `/modell` zeigt alle Modelle, getrennt nach **Claude** (Standard, fable, opus, sonnet, haiku) und **Codex** (live aus `codex app-server`, sonst „Standard“; einen eigenen Namen gibst du mit `/modell <name>` an). Fehlt ein Agent, steht dort ein grauer Hinweis. Wählst du ein Modell des anderen Agenten, wechselt der Agent mit. Direkt danach fragt m3dusa nach dem **Aufwand** (Claude: low, medium, high, xhigh, max; Codex: die Stufen des Modells). Er geht als `--effort` bzw. `-c model_reasoning_effort=…` an den Agenten.
+- **Anmelden:** `/codex login` bzw. `/claude login` (auch `/login codex`) startet die Anmeldung des Programms selbst im selben Terminal (`codex login` bzw. `claude auth login`). Ohne Bildschirm (SSH, Server) bietet m3dusa für Codex die Anmeldung per Gerätecode an (`codex login --device-auth`, direkt: `/codex login geraet`). Ist ein Agent nicht angemeldet, fragt `/codex` bzw. `/claude`, ob du dich jetzt anmelden willst. m3dusa sieht dabei keine Zugangsdaten und liest keine Anmeldedateien; den Status fragt es mit `claude auth status` und `codex login status` ab.
 
 | Befehl | Wirkung |
 |---|---|
-| `/hilfe` | alle Befehle |
-| `/claude` · `/codex` | Agent wechseln |
-| `/modell <name>` | Modell setzen (`/modell standard` setzt zurück) |
-| `/status` | Statusfeld neu |
-| `/ordner <pfad>` | Arbeitsordner wechseln (beginnt neuen Kontext) |
+| `/modell [name]` | Modell wählen (Liste: Claude & Codex), danach Aufwand; `/modell standard` setzt zurück |
+| `/aufwand [stufe]` | Denkaufwand setzen (ohne Stufe: Liste; `standard` setzt zurück) |
+| `/claude` · `/codex` | Agent wechseln (bietet die Anmeldung an, falls nötig) |
+| `/claude login` · `/codex login [geraet\|browser]` · `/login claude\|codex` | Agent anmelden |
+| `/kosten` · `/tokens` | Token und API-Vergleichspreis dieser Sitzung je Agent und Modell |
 | `/neu` | Kontext vergessen |
+| `/ordner <pfad>` | Arbeitsordner wechseln (beginnt neuen Kontext) |
+| `/status` | Statusfeld neu (prüft Agenten und Anmeldung erneut) |
 | `/gaeste [alle]` · `/dienst [status\|start\|stop\|neustart\|logs]` | wie `m3dusa gaeste` bzw. `m3dusa dienst` |
+| `/hilfe` | alle Befehle, nach Gruppen |
 | `/ende` | beenden |
+
+**Agent wird nicht gefunden?** m3dusa sucht in dieser Reihenfolge: PATH des Programms, `bash -lc`, deine Login-Shell interaktiv (`$SHELL -lic`, z. B. zsh auf Kali; liest `~/.zshrc`), dann die üblichen Ordner (`~/.npm-global/bin`, `~/.local/bin`, `~/.nvm/versions/node/*/bin`, `~/.volta/bin`, `~/.bun/bin`, `~/.cargo/bin`, `/usr/local/bin`, `/opt/homebrew/bin` …) und zuletzt `$(npm config get prefix)/bin`. Gestartet wird das gefundene Programm über seinen absoluten Pfad. `m3dusa pruefen` zeigt, wo es gefunden bzw. überall gesucht wurde.
 
 Wie `m3dusa agent` läuft der Agent hier mit den Rechten deines Benutzers (die Freigaben und die Sandbox gelten für Aufträge vom Haupt-PC).
 
 Damit Claude Code oder Codex auf dem Linux-PC laufen, müssen sie **dort** installiert und angemeldet sein:
 
-- Claude Code: `npm i -g @anthropic-ai/claude-code`, danach einmal `claude` starten und anmelden.
-- Codex: `npm i -g @openai/codex`, danach `codex login`.
+- Claude Code: `npm i -g @anthropic-ai/claude-code`, danach `claude auth login` (oder im Terminal-Modus `/claude login`).
+- Codex: `npm i -g @openai/codex`, danach `codex login` (ohne Browser: `codex login --device-auth`, im Terminal-Modus `/codex login`).
+
+Version: 1.4.0.
 
 ## Sicherheit: so funktioniert es
 

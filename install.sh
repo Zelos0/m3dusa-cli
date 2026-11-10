@@ -52,6 +52,17 @@ ok "Befehl: $BIN/m3dusa"
 case ":$PATH:" in *":$BIN:"*) ;; *) warn "$BIN steht nicht im PATH. Einmal ausführen:  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc && source ~/.bashrc" ;; esac
 
 # ─── Dienst ───────────────────────────────────────────────────────────────────
+# PATH des Dienstes: systemd liest weder ~/.zshrc noch ~/.bashrc → übliche Ordner von npm/nvm/volta/bun/cargo dazu,
+# dazu die Ordner, in denen claude/codex in DIESER Shell gefunden werden (m3dusa sucht zur Laufzeit zusätzlich selbst).
+SVC_PATH="$BIN:$(dirname "$NODE")"
+add_path() { [ -n "$1" ] && [ -d "$1" ] && case ":$SVC_PATH:" in *":$1:"*) ;; *) SVC_PATH="$SVC_PATH:$1" ;; esac; return 0; }
+for a in claude codex; do p="$(command -v "$a" 2>/dev/null || true)"; case "$p" in /*) add_path "$(dirname "$p")" ;; esac; done
+add_path "$HOME/.npm-global/bin"; add_path "$HOME/.local/bin"
+NVM_BIN_DIR="$(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | sort -V | tail -n 1 || true)"; add_path "$NVM_BIN_DIR"
+add_path "$HOME/.volta/bin"; add_path "$HOME/.bun/bin"; add_path "$HOME/.cargo/bin"; add_path "$HOME/.local/share/pnpm"
+if command -v npm >/dev/null 2>&1; then add_path "$(npm config get prefix 2>/dev/null)/bin"; fi
+SVC_PATH="$SVC_PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
 if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
   mkdir -p "$UNIT_DIR"
   cat > "$UNIT_DIR/m3dusa.service" <<EOF
@@ -64,7 +75,7 @@ Wants=network-online.target
 ExecStart=$NODE $REPO/bin/m3dusa.mjs daemon
 Restart=always
 RestartSec=5
-Environment=PATH=$BIN:$(dirname "$NODE"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PATH=$SVC_PATH
 
 [Install]
 WantedBy=default.target

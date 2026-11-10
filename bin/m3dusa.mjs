@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { addRevoked, clock, cleanServer, DEFAULT_SERVER, dirs, expandHome, fingerprint, groups, hubCall, isPaired, knownGuests, parseCode, readCfg, updateCfg, VERSION, writeCfg } from '../lib/core.mjs'
 import { foldersOf, modeOf, sandboxStatus } from '../lib/policy.mjs'
 import { grant, parseWindow, revoke, sudoStatus, sudoTarget } from '../lib/sudo.mjs'
-import { agentArgv, agentsAvailable, readAgentLine, viaLoginShell } from '../lib/agents.mjs'
+import { agentArgv, agentsAvailable, authArgv, INSTALL, launchArgv, locateAgentSync, parseAuth, readAgentLine, spawnSpec } from '../lib/agents.mjs'
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const argv = process.argv.slice(2)
@@ -46,18 +46,19 @@ ${c.b('Gäste')} (Zugang auf Zeit, vom Besitzer in M3DUSA geteilt)
 ${c.b('Terminal-Modus')} (wie claude / codex)
   m3dusa                          im Terminal ohne Argumente: interaktiver Modus mit Start-Animation
   m3dusa chat [--no-anim]         dasselbe ausdrücklich (ohne Animation auch: M3DUSA_NO_ANIM=1)
-                                  darin: Freitext = Auftrag, /hilfe /claude /codex /modell /status
-                                         /ordner /neu /gaeste /dienst /ende
+                                  darin: Freitext = Auftrag, „/“ zeigt Befehle beim Tippen:
+                                         /modell /aufwand /claude /codex /login /kosten /status
+                                         /ordner /neu /gaeste /dienst /hilfe /ende
 
 ${c.b('Selbst arbeiten')}
-  m3dusa agent claude|codex "<Auftrag>" [--ordner PFAD] [--modell M]
+  m3dusa agent claude|codex "<Auftrag>" [--ordner PFAD] [--modell M] [--aufwand STUFE]
   m3dusa log [Anzahl]             Protokoll der Aufträge vom Haupt-PC
 
 ${c.b('Dienst')}
   m3dusa dienst status|start|stop|neustart|logs
   m3dusa dienst autostart         auch ohne Anmeldung laufen (sudo loginctl enable-linger)
   m3dusa update                   neueste Fassung holen (git pull) und Dienst neu starten
-  m3dusa pruefen                  alles prüfen (Node, Server, Sandbox, sudo, Claude/Codex)
+  m3dusa pruefen                  alles prüfen (Node, Server, Sandbox, sudo, wo Claude/Codex liegen, Anmeldung)
 `
 
 async function main() {
@@ -218,9 +219,11 @@ async function agent() {
   if (kind !== 'claude' && kind !== 'codex') die('m3dusa agent claude|codex "<Auftrag>" [--ordner PFAD] [--modell M]')
   const prompt = words.join(' ').trim()
   if (!prompt) die('Auftrag fehlt.')
-  if (!agentsAvailable()[kind]) die(kind === 'claude' ? 'Claude Code fehlt: npm i -g @anthropic-ai/claude-code, dann einmal `claude` (anmelden).' : 'Codex fehlt: npm i -g @openai/codex, dann `codex login`.')
+  const loc = locateAgentSync(kind)
+  if (!loc.path) die((kind === 'claude' ? 'Claude Code fehlt: npm i -g @anthropic-ai/claude-code, dann `claude auth login`.' : 'Codex fehlt: npm i -g @openai/codex, dann `codex login`.') + '  (Wo gesucht wurde: m3dusa pruefen)')
   const cwd = path.resolve(expandHome(opt('ordner') || process.cwd()))
-  const p = spawn(viaLoginShell(agentArgv(kind, { model: opt('modell') }))[0], viaLoginShell(agentArgv(kind, { model: opt('modell') })).slice(1), { cwd, stdio: ['pipe', 'pipe', 'inherit'] })
+  const av = launchArgv(agentArgv(kind, { model: opt('modell'), effort: opt('aufwand') }), loc)
+  const p = spawn(av[0], av.slice(1), { cwd, stdio: ['pipe', 'pipe', 'inherit'] })
   p.stdin.end(prompt)
   let pend = '', final
   p.stdout.on('data', b => {
@@ -280,9 +283,21 @@ async function doctor() {
   ok(sb.ok, 'Sandbox (bubblewrap)', sb.why)
   ok(modeOf(cfg) === 'benutzer' || foldersOf(cfg).length > 0, 'Freigaben (' + modeOf(cfg) + ')', 'm3dusa ordner add <pfad>')
   const s = sudoStatus(); console.log((s.active ? c.g('● ') : c.d('○ ')) + 'sudo ' + (s.active ? 'frei' : 'gesperrt (normal)'))
-  const ag = agentsAvailable()
-  ok(ag.claude, 'Claude Code', 'npm i -g @anthropic-ai/claude-code')
-  ok(ag.codex, 'Codex', 'npm i -g @openai/codex')
+  // 1.4.0: zeigen, WO die Agenten gefunden wurden (bzw. wo gesucht wurde) und ob sie angemeldet sind
+  for (const k of ['claude', 'codex']) {
+    const loc = locateAgentSync(k, { fresh: true })
+    const name = k === 'claude' ? 'Claude Code' : 'Codex'
+    if (!loc.path) {
+      ok(false, name + ' nicht gefunden', INSTALL[k])
+      console.log(c.d('    gesucht: ' + loc.searched.join(' · ')))
+      continue
+    }
+    const sp = spawnSpec(authArgv(k), loc)
+    const r = spawnSync(sp.cmd, sp.args, { encoding: 'utf8', timeout: 20000, shell: sp.shell, windowsHide: true })
+    const auth = parseAuth(k, r.status, (r.stdout || '') + (r.stderr || ''))
+    ok(true, `${name}  ${loc.path}` + c.d(`  (über ${loc.via})`))
+    console.log('    ' + (auth === 'yes' ? c.g('angemeldet ✓') : auth === 'no' ? c.y('nicht angemeldet') + c.d(k === 'claude' ? '  → claude auth login  (oder im Terminal-Modus: /claude login)' : '  → codex login --device-auth  (oder im Terminal-Modus: /codex login)') : c.d('Anmeldung unbekannt')))
+  }
   ok(hasSystemd(), 'systemd-Benutzerdienst', 'ohne systemd: m3dusa daemon im Hintergrund starten')
 }
 
