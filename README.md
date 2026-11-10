@@ -41,6 +41,7 @@ Der Code ist 10 Minuten gültig und funktioniert nur einmal. Er enthält den **F
 
 | Befehl | Wirkung |
 |---|---|
+| `m3dusa` · `m3dusa chat` | Terminal-Modus (siehe unten) |
 | `m3dusa status` | Verbindung, Modus, Ordner, sudo, Sandbox, Claude/Codex |
 | `m3dusa ordner add <pfad>` · `m3dusa ordner entfernen <pfad>` | Ordner freigeben bzw. Freigabe entfernen |
 | `m3dusa modus ordner` | nur freigegebene Ordner, Befehle laufen in der Sandbox (Standard) |
@@ -54,6 +55,27 @@ Der Code ist 10 Minuten gültig und funktioniert nur einmal. Er enthält den **F
 | `m3dusa update` | neueste Fassung holen (`git pull`) und Dienst neu starten |
 | `m3dusa pruefen` | alles prüfen |
 | `m3dusa logout` | Kopplung lösen |
+
+## Terminal-Modus
+
+`m3dusa` ohne Argumente startet in einem echten Terminal einen interaktiven Modus, ähnlich wie `claude` oder `codex`. Ausdrücklich geht es auch mit `m3dusa chat`. Ohne Terminal (z. B. in Skripten mit Umleitung) zeigt `m3dusa` wie bisher die Hilfe. Alle anderen Befehle bleiben unverändert.
+
+- **Start:** eine kurze Animation (Logo mit Farbverlauf Violett → Cyan → Grün, Schlangen als Welle), danach ein Statusfeld mit Version, Gerät, Hub-Verbindung, Dienst, gefundenen Agenten (mit Version), Arbeitsordner und aktivem Agenten/Modell. Ohne Animation: `m3dusa chat --no-anim` oder `M3DUSA_NO_ANIM=1`. Bei `NO_COLOR` oder `TERM=dumb` gibt es nur ein ruhiges Banner ohne Farbe.
+- **Freitext** ist ein Auftrag an den aktiven Agenten im aktuellen Ordner. Die Ausgabe erscheint live; solange nichts kommt, läuft ein Spinner. Am Ende steht die Dauer. Folgeaufträge behalten den Kontext (`claude --resume <Sitzung>` bzw. `codex exec resume <Sitzung>`).
+- **Tasten:** ↑/↓ Verlauf, Tab ergänzt Befehle und Ordner, `\` am Zeilenende schreibt in der nächsten Zeile weiter. Strg+C während eines Laufs bricht nur den Lauf ab; am leeren Prompt zweimal Strg+C (oder Strg+D) beendet.
+
+| Befehl | Wirkung |
+|---|---|
+| `/hilfe` | alle Befehle |
+| `/claude` · `/codex` | Agent wechseln |
+| `/modell <name>` | Modell setzen (`/modell standard` setzt zurück) |
+| `/status` | Statusfeld neu |
+| `/ordner <pfad>` | Arbeitsordner wechseln (beginnt neuen Kontext) |
+| `/neu` | Kontext vergessen |
+| `/gaeste [alle]` · `/dienst [status\|start\|stop\|neustart\|logs]` | wie `m3dusa gaeste` bzw. `m3dusa dienst` |
+| `/ende` | beenden |
+
+Wie `m3dusa agent` läuft der Agent hier mit den Rechten deines Benutzers (die Freigaben und die Sandbox gelten für Aufträge vom Haupt-PC).
 
 Damit Claude Code oder Codex auf dem Linux-PC laufen, müssen sie **dort** installiert und angemeldet sein:
 

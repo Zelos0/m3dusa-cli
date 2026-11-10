@@ -12,7 +12,10 @@ import { agentArgv, agentsAvailable, readAgentLine, viaLoginShell } from '../lib
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const argv = process.argv.slice(2)
-const cmd = (argv[0] || 'hilfe').toLowerCase()
+// Ohne Argumente (oder nur --no-anim) in einem echten Terminal → Terminal-Modus; sonst wie bisher die Hilfe.
+const TUI_FLAGS = ['--no-anim']
+const wantsTui = argv.every(a => TUI_FLAGS.includes(a)) && ((process.stdin.isTTY && process.stdout.isTTY) || process.env.M3DUSA_TUI_FORCE === '1')
+const cmd = wantsTui ? 'chat' : (argv[0] || 'hilfe').toLowerCase()
 const opt = name => { const i = argv.indexOf('--' + name); return i > 0 ? argv[i + 1] : undefined }
 const rest = () => argv.slice(1).filter((x, i, a) => !x.startsWith('--') && !(i > 0 && a[i - 1].startsWith('--')))
 const c = process.stdout.isTTY ? { g: s => `\x1b[32m${s}\x1b[0m`, y: s => `\x1b[33m${s}\x1b[0m`, r: s => `\x1b[31m${s}\x1b[0m`, b: s => `\x1b[1m${s}\x1b[0m`, d: s => `\x1b[2m${s}\x1b[0m` } : { g: s => s, y: s => s, r: s => s, b: s => s, d: s => s }
@@ -40,6 +43,12 @@ ${c.b('Gäste')} (Zugang auf Zeit, vom Besitzer in M3DUSA geteilt)
   m3dusa gaeste [alle]            Gastzugänge zeigen (aktive; "alle" auch beendete)
   m3dusa gaeste sperren <ID>      Zugang hier sofort sperren (ID aus der Liste, z. B. g_1a2b3c4d5e6f)
 
+${c.b('Terminal-Modus')} (wie claude / codex)
+  m3dusa                          im Terminal ohne Argumente: interaktiver Modus mit Start-Animation
+  m3dusa chat [--no-anim]         dasselbe ausdrücklich (ohne Animation auch: M3DUSA_NO_ANIM=1)
+                                  darin: Freitext = Auftrag, /hilfe /claude /codex /modell /status
+                                         /ordner /neu /gaeste /dienst /ende
+
 ${c.b('Selbst arbeiten')}
   m3dusa agent claude|codex "<Auftrag>" [--ordner PFAD] [--modell M]
   m3dusa log [Anzahl]             Protokoll der Aufträge vom Haupt-PC
@@ -63,6 +72,7 @@ async function main() {
     case 'sudo': return sudo()
     case 'gaeste': case 'gäste': case 'guests': return guests()
     case 'agent': return agent()
+    case 'chat': case 'tui': { const { runTui } = await import('../lib/tui.mjs'); return runTui({ bin: fileURLToPath(import.meta.url), argv }) }
     case 'log': return showLog()
     case 'dienst': case 'service': return service()
     case 'daemon': { const { runDaemon } = await import('../lib/daemon.mjs'); return runDaemon({ once: argv.includes('--einmal') }) }
